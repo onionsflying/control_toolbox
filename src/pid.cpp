@@ -40,6 +40,7 @@
 
 #include <control_toolbox/pid.h>
 #include <tinyxml.h>
+#include <algorithm>
 
 #include <boost/algorithm/clamp.hpp>
 
@@ -335,16 +336,22 @@ double Pid::computeCommand(double error, double error_dot, ros::Duration dt)
   // Calculate the integral of the position error
   i_error_ += dt.toSec() * p_error_;
 
-  // Calculate integral contribution to command
-  i_term = gains.i_gain_ * i_error_;
-
-  // Limit i_term so that the limit is meaningful in the output
-  i_term = boost::algorithm::clamp(i_term, gains.i_min_, gains.i_max_);
-
   if(gains.antiwindup_ && gains.i_gain_!=0)
   {
     // Prevent i_error_ from climbing higher than permitted by i_max_/i_min_
-    i_error_ = i_term / gains.i_gain_;
+    double i_error_min = std::min<double>(gains.i_min_ / gains.i_gain_, gains.i_max_ / gains.i_gain_);
+    double i_error_max = std::max<double>(gains.i_min_ / gains.i_gain_, gains.i_max_ / gains.i_gain_);
+
+    i_error_ = boost::algorithm::clamp(i_error_, i_error_min, i_error_max);
+  }
+
+  // Calculate integral contribution to command
+  i_term = gains.i_gain_ * i_error_;
+
+  if(!gains.antiwindup_)
+  {
+    // Limit i_term so that the limit is meaningful in the output
+    i_term = boost::algorithm::clamp(i_term, gains.i_min_, gains.i_max_);
   }
 
   // Calculate derivative contribution to command
